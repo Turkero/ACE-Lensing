@@ -1,3 +1,5 @@
+from setuptools import setup, find_packages
+
 setup(
     name='ace_lens',                    # Name of the package
     version='0.1.0',                    # Package version
