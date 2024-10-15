@@ -1,16 +1,3 @@
-from setuptools import setup, find_packages
-from setuptools.command.clean import clean as Clean
-import shutil
-
-class CleanCommand(Clean):
-    def run(self):
-        # Call the original clean command
-        Clean.run(self)
-        # Remove build directories
-        shutil.rmtree('build', ignore_errors=True)
-        shutil.rmtree('dist', ignore_errors=True)
-        shutil.rmtree('ace_lens.egg-info', ignore_errors=True)
-
 setup(
     name='ace_lens',                    # Name of the package
     version='0.1.0',                    # Package version
@@ -38,8 +25,5 @@ setup(
     'scikit-learn>=1.5.2',              # For machine learning tasks
     'xgboost>=2.0.1',                   # For gradient boosting
     ],
-    cmdclass={
-        'clean': CleanCommand,  # Register the clean command
-    },
 )
 
