@@ -1,157 +1,257 @@
 """
 model.py
 
-This module contains functions for predicting lensing probability density functions (pdf) using a pre-trained XGBoost model.
-It includes input validation to ensure that the necessary parameters are provided for making predictions.
+This module contains functions for predicting lensing probability density functions (PDF) using 
+pre-trained XGBoost models. It includes input validation to ensure that the necessary parameters 
+are provided for making predictions.
 
 Functions:
-- predict(h, w, z, Om=None, s8=None, S8=None): Predicts pdf based on cosmological parameters.
-"""
+----------
+- load_model(model_name: str) -> xgb.Booster:
+    Loads a pre-trained XGBoost model.
+    
+- load_training_data() -> pd.DataFrame:
+    Loads the training data.
 
-import xgboost as xgb
+- load_pca() -> PCA:
+    Loads the PCA (Principal Component Analysis) transformation model.
+
+- load_scaling() -> StandardScaler:
+    Loads the input data scaling model.
+
+- check_parameters(Om: float, h: float, w: float, s8: float) -> bool:
+    Checks if the input cosmological parameters fall within specified ranges.
+
+- predict_pdf(Om: float, h: float, w: float, s8: float, z: float) -> tuple:
+    Predicts the probability density function (PDF) based on input cosmological parameters.
+
+- predict_sigma(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
+    Predicts the sigma (standard deviation) for the PDF based on input cosmological parameters.
+
+- predict_mean(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
+    Predicts the mean for the PDF based on input cosmological parameters.
+
+- transform_input(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
+    Validates and transforms the input parameters into a standardized format for model prediction.
+"""
 import numpy as np
 import pkg_resources
 import xgboost as xgb
 import pandas as pd
 import pickle
-import logging
-
-# Configure the logging system
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from astropy.io import fits
 
 
-def load_model(model_name):
+def load_model(model_name: str) -> xgb.Booster:
     """
     Load a pre-trained XGBoost model.
 
     Parameters:
-    - model_name (str): Name of the model to load.
+    -----------
+    model_name : str
+        Name of the model to load.
 
     Returns:
-    - xgb.Booster: Loaded XGBoost model.
+    --------
+    xgb.Booster
+        Loaded XGBoost model.
+
+    Raises:
+    -------
+    FileNotFoundError
+        If the model file is not found.
+    Exception
+        If any other error occurs while loading the model.
     """
-    model_path = pkg_resources.resource_filename('ace_lens', f'models/{model_name}.xgb')
-    logging.info(f"Loading model: {model_name} from {model_path}")
+    model_path = pkg_resources.resource_filename('ace_lensing', f'models/{model_name}.xgb')
     try:
         model = xgb.Booster(model_file=model_path)
         return model
     except FileNotFoundError:
-        logging.error(f"Model file not found: {model_path}")
-        raise
+        raise FileNotFoundError(f"Model file not found: {model_path}")
     except Exception as e:
-        logging.error(f"An error occurred while loading model: {e}")
-        raise
+        raise Exception(f"An error occurred while loading model: {e}")
 
-def load_training_data():
+def load_training_data() -> pd.DataFrame:
     """
     Load the training data.
 
     Returns:
-    - pd.DataFrame: Training data in pandas DataFrame format.
+    --------
+    pd.DataFrame
+        Training data in pandas DataFrame format.
+
+    Raises:
+    -------
+    FileNotFoundError
+        If the training data file is not found.
+    Exception
+        If any other error occurs while loading the training data.
     """
-
-    data_path = pkg_resources.resource_filename('ace_lens', 'data/training_data.csv')
+    data_path = pkg_resources.resource_filename('ace_lensing', 'data/training_set.pkl')
     try:
-        return pd.read_csv(data_path)
+        with open(data_path, 'rb') as f:
+            return pickle.load(f)
     except FileNotFoundError:
-        logging.error(f"Training data file not found: {data_path}")
-        raise
+        raise FileNotFoundError(f"Training data file not found: {data_path}")
     except Exception as e:
-        logging.error(f"An error occurred while loading training data: {e}")
-        raise
+        raise Exception(f"An error occurred while loading training data: {e}")
 
-def load_pca():
+
+def load_pca() -> PCA:
     """
     Load PCA (Principal Component Analysis) transformation model.
 
     Returns:
-    - PCA: Loaded PCA model.
+    --------
+    PCA
+        Loaded PCA model.
+
+    Raises:
+    -------
+    FileNotFoundError
+        If the PCA model file is not found.
+    Exception
+        If any other error occurs while loading the PCA model.
     """
-    pca_path = pkg_resources.resource_filename('ace_lens', 'models/pca.pkl')
+    pca_path = pkg_resources.resource_filename('ace_lensing', 'models/pca.pkl')
     try:
         with open(pca_path, 'rb') as f:
             return pickle.load(f)
     except FileNotFoundError:
-        logging.error(f"PCA model file not found: {pca_path}")
-        raise
+        raise FileNotFoundError(f"PCA model file not found: {pca_path}")
     except Exception as e:
-        logging.error(f"An error occurred while loading PCA model: {e}")
-        raise
+        raise Exception(f"An error occurred while loading PCA model: {e}")
 
     
-def load_scaling():
+def load_scaling() -> StandardScaler:
     """
     Load input data scaling model.
 
     Returns:
-    - scale: The scaling model.
+    --------
+    scale
+        The scaling model.
+
+    Raises:
+    -------
+    FileNotFoundError
+        If the scaling model file is not found.
+    Exception
+        If any other error occurs while loading the scaling model.
     """
-    scale_path = pkg_resources.resource_filename('ace_lens', 'models/scale.pkl')
-    logging.info(f"Loading scaling model from {scale_path}")
+    scale_path = pkg_resources.resource_filename('ace_lensing', 'models/scale.pkl')
     try:
         with open(scale_path, 'rb') as f:
             return pickle.load(f)
     except FileNotFoundError:
-        logging.error(f"Scaling model file not found: {scale_path}")
-        raise
+        raise FileNotFoundError(f"Scaling model file not found: {scale_path}")
     except Exception as e:
-        logging.error(f"An error occurred while loading scaling model: {e}")
-        raise
+        raise Exception(f"An error occurred while loading scaling model: {e}")
 
 
-def predict(h: float, w: float, z: float, Om: float = None, s8: float = None, S8: float = None):
+def check_parameters(Om: float, h: float, w: float, s8: float) -> bool:
     """
-    Predicts the probability density function (PDF) based on input cosmological parameters 
-    using pre-trained models and inverse PCA transformation.
+    Checks if the input cosmological parameters fall within specified ranges for 
+    predicting the PDF.
 
     Parameters:
     -----------
+    Om : float
+        Matter density parameter, should be between 0.2 and 0.4.
     h : float
-        Hubble parameter.
+        Hubble parameter, should be between 60 and 80.
     w : float
-        Dark energy equation of state parameter.
-    z : float
-        Redshift.
-    Om : float, optional
-        Matter density parameter. If not provided, it will be calculated using other parameters.
-    s8 : float, optional
-        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If not provided, it will be calculated using other parameters.
-    S8 : float, optional
-        A derived parameter related to s8 and Om. If not provided, it will be calculated using other parameters.
+        Dark energy equation of state parameter, should be between -1.5 and -0.7.
+    s8 : float
+        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc, 
+        should be between 0.7 and 0.9.
 
     Returns:
     --------
-    mu_vec : numpy.ndarray
-        The non-standardized vector of values (mu) for the PDF.
-    pdf : numpy.ndarray
-        The non-standardized reconstructed PDF.
+    bool
+        True if all parameters are within their specified ranges.
 
     Raises:
     -------
     ValueError
-        If any mandatory parameter (h, w, z) is missing or fewer than two optional parameters (Om, s8, S8) are provided.
+        If any parameter is outside the defined range, an error is raised 
+        indicating which parameter is invalid.
     """
+    if not (0.2 <= Om <= 0.4):
+        raise ValueError(f"Om value {Om} is out of range (0.2 - 0.4)")
+    if not (60 <= h <= 80):
+        raise ValueError(f"h value {h} is out of range (60 - 80)")
+    if not (-1.5 <= w <= -0.7):
+        raise ValueError(f"w value {w} is out of range (-1.5 - -0.7)")
+    if not (0.7 <= s8 <= 0.9):
+        raise ValueError(f"s8 value {s8} is out of range (0.7 - 0.9)")
+    
+    return True
 
 
-    # Log the input parameters
-    logging.info(f"Received input parameters: h={h}, w={w}, z={z}, Om={Om}, s8={s8}, S8={S8}")
+def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float):
+"""
+Predicts the probability density function (PDF) based on input cosmological parameters 
+using pre-trained models and inverse PCA transformation.
 
-    X_input = validate_and_transform_input(h, w, z, Om, s8, S8)
+Parameters:
+-----------
+Om : float
+    Matter density parameter (0.2 to 0.4).
+h : float
+    Hubble parameter (60 to 80).
+w : float
+    Dark energy equation of state parameter (-1.5 to -0.7).
+s8 : float
+    Standard deviation of matter fluctuations (0.7 to 0.9).
+z : float
+    Redshift value.
+
+Returns:
+--------
+mu_vec : numpy.ndarray
+    The non-standardized vector of values (mu) for the PDF.
+pdf : numpy.ndarray
+    The non-standardized reconstructed PDF.
+
+Raises:
+-------
+ValueError
+    If any mandatory parameter is missing or invalid.
+"""
+
+    # Count the number of parameters provided
+    params = [Om, h, w, s8, z]
+    num_provided = sum(p is not None for p in params)
+
+    check_parameters(*params)
+
+    if num_provided < 4:
+        raise TypeError("The following parameters must be provided: Om, h, w, s8, z.")
+
+    # Print the input parameters
+    print(f"Received input parameters: Om={Om}, h={h}, w={w}, s8={s8}, z={z}")
+
+    X_input = transform_input(*params)
+    
+    # Prepare input data in DMatrix format for XGBoost
+    dmatrix = xgb.DMatrix(X_input)
+
 
     components_predictions = []
     # Load the pre-trained XGBoost model
     for i in range(8):  # Assuming you have 8 components/models
         model_name = f'model_comp{i}'  # Dynamically generate model name (e.g., model_comp0, model_comp1, etc.)
         model = load_model(model_name)  # Load the corresponding model using the load_model function
-        
-        # Prepare input data in DMatrix format for XGBoost
-        dmatrix = xgb.DMatrix(X_input)
-        
+
         # Perform prediction with the current model
         pred = model.predict(dmatrix)
         
         # Store the predicted component
         components_predictions.append(pred)
+
+    components_predictions = np.array(components_predictions).reshape(1,-1)
 
     # Inverse PCA transformation
     pca = load_pca()
@@ -162,9 +262,12 @@ def predict(h: float, w: float, z: float, Om: float = None, s8: float = None, S8
     # Normalization
     pdf_std = pdfs_reconstructed / np.trapz(pdfs_reconstructed, mu_vec_std)
 
-    # Non-standardizing
-    sigma = predict_sigma(X_input)
-    mean = predict_mean(X_input)
+    model_mean = load_model("model_mean")  
+    model_sigma = load_model("model_sigma") 
+
+
+    mean = model_mean.predict(dmatrix)
+    sigma = model_sigma.predict(dmatrix)
 
     mu_vec = mu_vec_std * sigma + mean
     pdf_non_std = pdf_std / sigma
@@ -173,24 +276,22 @@ def predict(h: float, w: float, z: float, Om: float = None, s8: float = None, S8
     return mu_vec, pdf
 
 
-def predict_sigma(h: float, w: float, z: float, Om: float = None, s8: float = None, S8: float = None):
+def predict_sigma(Om: float, h: float, w: float,  s8: float, z: float):
     """
     Predicts the sigma (standard deviation) for the PDF based on input cosmological parameters.
 
     Parameters:
     -----------
+    Om : float, optional
+        Matter density parameter.
     h : float
         Hubble parameter.
     w : float
         Dark energy equation of state parameter.
-    z : float
-        Redshift.
-    Om : float, optional
-        Matter density parameter. If not provided, it will be calculated using other parameters.
     s8 : float, optional
         Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If not provided, it will be calculated using other parameters.
-    S8 : float, optional
-        A derived parameter related to s8 and Om. If not provided, it will be calculated using other parameters.
+    z : float
+        Redshift.
 
     Returns:
     --------
@@ -200,35 +301,44 @@ def predict_sigma(h: float, w: float, z: float, Om: float = None, s8: float = No
     Raises:
     -------
     ValueError
-        If any mandatory parameter (h, w, z) is missing or fewer than two optional parameters (Om, s8, S8) are provided.
+        If any mandatory parameter (Om, h, w, s8, z) is missing.
     """
 
+    # Count the number of parameters provided
+    params = [Om, h, w, s8, z]
+    num_provided = sum(p is not None for p in params)
 
-    X_input = validate_and_transform_input(h, w, z, Om, s8, S8)
+    check_parameters(*params)
+
+    if num_provided < 4:
+        raise TypeError("The following parameters must be provided: Om, h, w, s8, z.")
+
+    # Print the input parameters
+    print(f"Received input parameters: Om={Om}, h={h}, w={w}, s8={s8}, z={z}")
+
+    X_input = transform_input(*params)
 
     dmatrix = xgb.DMatrix(X_input)
     model = load_model("model_sigma")   
     return model.predict(dmatrix)
     
 
-def predict_mean(h: float, w: float, z: float, Om: float = None, s8: float = None, S8: float = None):
+def predict_mean(Om: float, h: float, w: float,  s8: float, z: float):
     """
     Predicts the mean for the PDF based on input cosmological parameters.
 
     Parameters:
     -----------
+    Om : float, optional
+        Matter density parameter.
     h : float
         Hubble parameter.
     w : float
         Dark energy equation of state parameter.
-    z : float
-        Redshift.
-    Om : float, optional
-        Matter density parameter. If not provided, it will be calculated using other parameters.
     s8 : float, optional
         Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If not provided, it will be calculated using other parameters.
-    S8 : float, optional
-        A derived parameter related to s8 and Om. If not provided, it will be calculated using other parameters.
+    z : float
+        Redshift.
 
     Returns:
     --------
@@ -240,9 +350,19 @@ def predict_mean(h: float, w: float, z: float, Om: float = None, s8: float = Non
     ValueError
         If any mandatory parameter (h, w, z) is missing or fewer than two optional parameters (Om, s8, S8) are provided.
     """
+    # Count the number of parameters provided
+    params = [Om, h, w, s8, z]
+    num_provided = sum(p is not None for p in params)
 
+    check_parameters(*params)
 
-    X_input = validate_and_transform_input(h, w, z, Om, s8, S8)
+    if num_provided < 4:
+        raise TypeError("The following parameters must be provided: Om, h, w, s8, z.")
+
+    # Print the input parameters
+    print(f"Received input parameters: Om={Om}, h={h}, w={w}, s8={s8}, z={z}")
+
+    X_input = transform_input(*params)
 
     dmatrix = xgb.DMatrix(X_input)
     model = load_model("model_mean")   
@@ -250,24 +370,22 @@ def predict_mean(h: float, w: float, z: float, Om: float = None, s8: float = Non
 
 
 
-def validate_and_transform_input(h, w, z, Om, s8, S8):
+def transform_input(Om: float, h: float, w: float,  s8: float, z: float):
     """
     Validates and transforms the input parameters into a standardized format for model prediction.
 
     Parameters:
     -----------
+    Om : float, optional
+        Matter density parameter.
     h : float
         Hubble parameter.
     w : float
         Dark energy equation of state parameter.
-    z : float
-        Redshift.
-    Om : float, optional
-        Matter density parameter. If not provided, it will be calculated using other parameters.
     s8 : float, optional
         Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If not provided, it will be calculated using other parameters.
-    S8 : float, optional
-        A derived parameter related to s8 and Om. If not provided, it will be calculated using other parameters.
+    z : float
+        Redshift.
 
     Returns:
     --------
@@ -280,32 +398,15 @@ def validate_and_transform_input(h, w, z, Om, s8, S8):
         If any mandatory parameter (h, w, z) is missing or fewer than two optional parameters (Om, s8, S8) are provided.
     """
 
-    
-    # Check that mandatory parameters are provided
-    if h is None:
-        logging.error("Parameter 'h' is mandatory.")
-        raise ValueError("Parameter 'h' is mandatory.")
-    if w is None:
-        logging.error("Parameter 'w' is mandatory.")
-        raise ValueError("Parameter 'w' is mandatory.")
-    if z is None:
-        logging.error("Parameter 'z' is mandatory.")
-        raise ValueError("Parameter 'z' is mandatory.")
+    X_input = np.array([Om, h, w, s8, z])
 
-    # Validate that at least two out of the three optional parameters are provided
-    provided = [Om, s8, S8]
-    provided_count = sum(arg is not None for arg in provided)
-    if provided_count < 2:
-        logging.error("You must provide at least two of the following: Om, s8, S8.")
-        raise ValueError("You must provide at least two of the following: Om, s8, S8.")
-    
-    # Correcting parameters
-    S8 = s8 / np.sqrt( Om / 0.3) if S8 is None else S8
-    Om = ( (s8 / S8)**2 ) * 0.3 if Om is None else Om
-    s8 = S8 * np.sqrt( Om / 0.3) if s8 is None else s8
-    X_input = np.array([Om, h, w, s8, S8, z])
+    # Define the column names
+    column_names = ["Om", "h", "w", "s8", "z"]
+
+    # Create the DataFrame
+    df = pd.DataFrame(X_input.reshape(1, -1), columns=column_names)
 
     scale = load_scaling()
-    X_input_std = scale.transform(X_input)
+    X_input_scaled = scale.transform(df)
 
-    return X_input_std
+    return X_input_scaled

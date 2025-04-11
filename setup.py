@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='ace_lens',                    # Name of the package
+    name='ace_lensing',                    # Name of the package
     version='0.1.0',                    # Package version
     author='tunc',                      # Package author
     author_email='ozgen.turker@edu.ufes.br',  # Author's email
@@ -19,7 +19,7 @@ setup(
     python_requires='>=3.6',            # Python version requirement
     install_requires=[                  # Dependencies
     'wheel',                            # For installing packages in a binary format. pip can create .whl files, easier dependency resolution.
-    'numpy>=2.0.2',                     # For numerical operations
+    'numpy==2.0.2',                      # For numerical operations
     'pandas>=2.2.3',                    # For data manipulation and analysis
     'matplotlib>=3.9.2',                # For plotting
     'natsort>=8.3.1',                   # For natural sorting
