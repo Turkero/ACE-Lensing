@@ -1,14 +1,17 @@
 # Include the XGBoost model file
-recursive-include ace_lens/models *.xgb
+recursive-include ace_lensing/models *.xgb
 
 # Include the PCA file
-include ace_lens/models/pca.pkl
+include ace_lensing/models/pca.pkl
 
-# Include all Python files in the ace_lens directory
-recursive-include ace_lens *.py
+# Include the Scaling file
+include ace_lensing/models/scale.pkl
+
+# Include all Python files in the ace_lensing directory
+recursive-include ace_lensing *.py
 
 # Include the training data file
-recursive-include ace_lens/data *.csv
+recursive-include ace_lensing/data *.parquet
 
 # Include the README file
 include README.md
