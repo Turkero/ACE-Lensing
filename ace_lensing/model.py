@@ -312,7 +312,7 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
 
     components_predictions = []
     # Load the pre-trained XGBoost model
-    for i in range(8):  # Assuming you have 8 components/models
+    for i in range(4):  # Assuming we have 4 components/models
         model_name = f'model_comp{i}'  # Dynamically generate model name (e.g., model_comp0, model_comp1, etc.)
         model = load_model(model_name)  # Load the corresponding model using the load_model function
 
