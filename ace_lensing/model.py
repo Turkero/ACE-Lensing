@@ -151,7 +151,7 @@ def load_training_data() -> pd.DataFrame:
         train_cosmo = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('cosmo')))
         train_statistics = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('statistics')))
         # Concatenate the DataFrames along the columns
-        df = pd.concat([train_mu_vec, train_pdf['pdf'], train_error['sigma'],
+        df = pd.concat([train_mu_vec, train_pdf['pdf'], train_error['poisson'],
                         train_cosmo[['Om', 'h', 'w', 's8', 'z']],
                         train_statistics[['mean', 'var', '3th', '4th', '5th', '6th', '7th', '8th', '9th', '10th']]],
                        axis=1)
@@ -331,7 +331,7 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
     # Defining the mu vector according the training set
     mu_vec_std = np.linspace(-2, 8, 5000)
     # Normalization
-    pdf_std = pdfs_reconstructed / np.trapz(pdfs_reconstructed, mu_vec_std)
+    pdf_std = pdfs_reconstructed / np.sum(pdfs_reconstructed * np.diff(mu_vec_std))
 
     model_mean = load_model("model_mean")  
     model_sigma = load_model("model_sigma") 
@@ -342,7 +342,7 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
 
     mu_vec = mu_vec_std * sigma + mean
     pdf_non_std = pdf_std / sigma
-    pdf = pdf_non_std / np.trapz(pdf_non_std, mu_vec)
+    pdf = pdf_non_std / np.sum(pdf_non_std * np.diff(mu_vec))
 
     pdfs_trained = enforce_monotonicity(pdf[0])
 
