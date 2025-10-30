@@ -68,6 +68,7 @@ def enforce_monotonicity(row, window_size=4):
       function zeroes out values starting from the violation point backward (for the 
       increasing section) or forward (for the decreasing section).
     """
+    row = np.array(row, copy=True)
     # Find the index of the peak point
     peak_index = np.argmax(row)
 
@@ -96,6 +97,40 @@ def enforce_monotonicity(row, window_size=4):
             row[i + 1:] = 0 
             break
     return row
+
+
+def smooth_pdf_fourier(pdf, cutoff=10, x=None):
+    """
+    Smooth a 1D PDF using Fourier transform with a given cutoff frequency.
+
+    Parameters:
+    -----------
+    pdf : np.ndarray
+        1D array of the PDF to smooth (expected length: 5000).
+    cutoff : float
+        Frequency cutoff for smoothing (default: 10).
+    x : np.ndarray or None
+        Optional array of x values corresponding to the PDF.
+        If None, a default linspace from -2 to 8 is used.
+
+    Returns:
+    --------
+    pdf_smooth : np.ndarray
+        Smoothed PDF (real values only).
+    """
+    if x is None:
+        x = np.linspace(-2, 8, len(pdf))
+    
+    # Compute FFT
+    fft = np.fft.fft(pdf)
+    freqs = np.fft.fftfreq(len(pdf), d=(x[1] - x[0]))
+    
+    # Zero out frequencies above cutoff
+    fft[np.abs(freqs) > cutoff] = 0
+    
+    # Inverse FFT to get smoothed PDF
+    pdf_smooth = np.fft.ifft(fft).real
+    return pdf_smooth
 
 
 def load_model(model_name: str) -> xgb.Booster:
@@ -260,35 +295,47 @@ def check_parameters(Om: float, h: float, w: float, s8: float, z: float) -> bool
 
 def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=True):
     """
-    Predicts the probability density function (PDF) based on input cosmological parameters 
-    using pre-trained models and inverse PCA transformation.
+    Predict the probability density function (PDF) for given cosmological parameters using
+    pre-trained XGBoost models and inverse PCA reconstruction, followed by Fourier smoothing
+    and normalization.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     Om : float
-        Matter density parameter (0.2 to 0.4).
+        Matter density parameter, typically in the range 0.2 to 0.4.
     h : float
-        Hubble parameter (60 to 80).
+        Dimensionless Hubble parameter, typically in the range 0.6 to 0.8.
     w : float
-        Dark energy equation of state parameter (-1.5 to -0.7).
+        Dark energy equation of state parameter, typically in the range -1.5 to -0.7.
     s8 : float
-        Standard deviation of matter fluctuations (0.7 to 0.9).
+        Standard deviation of matter density fluctuations, typically in the range 0.7 to 0.9.
     z : float
-        Redshift value.
+        Redshift value (non-negative float).
     verbose : bool, optional
-        If True, prints the input parameters. Defaults to True.
+        If True, prints the input parameters and diagnostic information. Default is True.
 
-    Returns:
-    --------
-    mu_vec : numpy.ndarray
-        The non-standardized vector of values (mu) for the PDF.
-    pdf : numpy.ndarray
-        The non-standardized reconstructed PDF.
-
-    Raises:
+    Returns
     -------
-    ValueError
-        If any mandatory parameter is missing or invalid.
+    mu_vec_prime : numpy.ndarray of shape (5000,)
+        Standardized and scaled mu vector corresponding to the PDF values.
+    pdf_prime_normalized : numpy.ndarray of shape (5000,)
+        Normalized PDF corresponding to `mu_vec_prime`. The values are non-negative and sum to 1
+        under the integration over `mu_vec_prime`.
+
+    Notes
+    -----
+    - The function performs the following steps:
+        1. Checks input parameters for validity.
+        2. Transforms inputs into model features.
+        3. Uses pre-trained XGBoost models to predict PCA components of the PDF.
+        4. Reconstructs the PDF via inverse PCA transformation.
+        5. Enforces monotonicity and smooths the PDF using Fourier transform with a cutoff of 10.
+        6. Uses  pre-trained XGBoost models to predict mean and sigma.
+        7. Unstandardized the PDF.
+        8. Forces mean to be 1.
+        9. Normalizes the resulting PDF.
+        
+    - The resulting `mu_vec_prime` and `pdf_prime_normalized` can be used for plotting or further analysis.
     """
 
     # Count the number of parameters provided
@@ -330,23 +377,32 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
 
     # Defining the mu vector according the training set
     mu_vec_std = np.linspace(-2, 8, 5000)
-    # Normalization
-    pdf_std = pdfs_reconstructed / np.sum(pdfs_reconstructed * np.diff(mu_vec_std))
+
+    pdfs_trained = enforce_monotonicity(pdfs_reconstructed[0])
+    pdf_smoothed = smooth_pdf_fourier(pdfs_trained, cutoff=10, x=mu_vec_std)
+
 
     model_mean = load_model("model_mean")  
     model_sigma = load_model("model_sigma") 
-
 
     mean = model_mean.predict(dmatrix)
     sigma = model_sigma.predict(dmatrix)
 
     mu_vec = mu_vec_std * sigma + mean
-    pdf_non_std = pdf_std / sigma
-    pdf = pdf_non_std / np.sum(pdf_non_std * np.diff(mu_vec))
+    pdf_non_std = pdf_smoothed / sigma
 
-    pdfs_trained = enforce_monotonicity(pdf[0])
+    mu_vec_prime = mu_vec / mean
+    pdf_prime = pdf_non_std * mean
 
-    return mu_vec, pdfs_trained
+    mu_center = (mu_vec_prime[1:] - mu_vec_prime[:-1]) / 2
+    dx = np.diff(mu_vec_prime)
+    pdf_prime_normalized = pdf_prime / np.sum(pdf_prime*dx)
+
+    print("\nMean and Normalization Check:")
+    print(f"Normalization: {np.sum(pdf_prime_normalized * dx)}")
+    print(f"Mean: {np.sum(mu_center * pdf_prime_normalized * dx)}")
+
+    return mu_vec_prime, pdf_prime_normalized
 
 
 def predict_sigma(Om: float, h: float, w: float,  s8: float, z: float, verbose=True):
