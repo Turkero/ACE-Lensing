@@ -1,9 +1,9 @@
 """
 model.py
 
-This module contains functions for predicting lensing probability density functions (PDF) using 
-pre-trained XGBoost models. It includes input validation to ensure that the necessary parameters 
-are provided for making predictions.
+This module contains functions for predicting lensing probability density functions (PDF)
+using pre-trained XGBoost models. It includes data loading, preprocessing, and input
+validation utilities to ensure correct usage.
 
 Functions:
 ----------
@@ -11,7 +11,10 @@ Functions:
     Loads a pre-trained XGBoost model.
     
 - load_training_data() -> pd.DataFrame:
-    Loads the training data.
+    Loads and combines the training data from Parquet files.
+
+- load_testing_data() -> pd.DataFrame:
+    Loads and combines the testing data from Parquet files.
 
 - load_pca() -> PCA:
     Loads the PCA (Principal Component Analysis) transformation model.
@@ -20,7 +23,7 @@ Functions:
     Loads the input data scaling model.
 
 - check_parameters(Om: float, h: float, w: float, s8: float) -> bool:
-    Checks if the input cosmological parameters fall within specified ranges.
+    Checks if the input cosmological parameters fall within valid ranges.
 
 - predict_pdf(Om: float, h: float, w: float, s8: float, z: float) -> tuple:
     Predicts the probability density function (PDF) based on input cosmological parameters.
@@ -195,6 +198,42 @@ def load_training_data() -> pd.DataFrame:
         raise FileNotFoundError(f"Training data file not found: {e.filename}")
     except Exception as e:
         raise Exception(f"An error occurred while loading training data: {e}")
+
+
+def load_testing_data() -> pd.DataFrame:
+    """
+    Load the testing data by combining separate Parquet files for different columns.
+    
+    Returns:
+    --------
+    pd.DataFrame
+        Testing data in pandas DataFrame format with all necessary columns.
+    
+    Raises:
+    -------
+    FileNotFoundError
+        If any of the testing data files are not found.
+    Exception
+        If any other error occurs while loading the testing data.
+    """
+    base_path = 'data/testing_set_{}.parquet'
+    try:
+        test_mu_vec = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('mu_vec')))
+        test_pdf = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('pdf')))
+        test_error = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('error')))
+        test_cosmo = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('cosmo')))
+        test_statistics = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('statistics')))
+        
+        # Concatenate the DataFrames along the columns
+        df = pd.concat([test_mu_vec, test_pdf['pdf'], test_error['poisson'],
+                        test_cosmo[['Om', 'h', 'w', 's8', 'z']],
+                        test_statistics[['mean', 'var', '3th', '4th', '5th', '6th', '7th', '8th', '9th', '10th']]],
+                       axis=1)
+        return df
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Testing data file not found: {e.filename}")
+    except Exception as e:
+        raise Exception(f"An error occurred while loading testing data: {e}")
 
 
 def load_pca():
