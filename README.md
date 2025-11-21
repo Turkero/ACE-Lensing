@@ -2,11 +2,11 @@
 ### *Accurate Cosmological Emulator for the Lensing Magnification PDF*
 
 `ace_lensing` provides a fast and accurate emulator for the probability distribution function (PDF) of gravitational lensing magnification for point sources.  
-It includes the trained PCA decomposition, XGBoost regression models, and helper utilities to load the standardized/non-standardized training datasets.
+It includes the trained PCA decomposition and XGBoost regression models to load the standardized/non-standardized training datasets.
 
 This package allows users to:
-- predict a full magnification PDF for any cosmology–redshift point  
-- reconstruct PCA-based approximations  
+- predict a full magnification PDF for any cosmology–redshift point   
+- predict the standard deviation of the magnification PDF alone
 - load the training/testing datasets  
 - inspect the original simulation data used during emulator construction  
 
@@ -75,8 +75,7 @@ params = [0.3, 0.68, -1.0, 0.81, 1.0]
 sigma = predict_sigma(*params)
 ```
 
-Output:
-- sigma → predicted standard deviation of the magnification distribution
+sigma → predicted standard deviation of the magnification distribution
 
 This is the same $\sigma$ used to de-standardize the PCA-reconstructed PDFs during training.
 
