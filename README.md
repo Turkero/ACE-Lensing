@@ -75,7 +75,7 @@ params = [0.3, 0.68, -1.0, 0.81, 1.0]
 sigma = predict_sigma(*params)
 ```
 
-sigma → predicted standard deviation of the magnification distribution
+- sigma → predicted standard deviation of the magnification distribution
 
 This is the same $\sigma$ used to de-standardize the PCA-reconstructed PDFs during training.
 
