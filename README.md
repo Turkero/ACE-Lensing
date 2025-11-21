@@ -1,39 +1,152 @@
-# ACE Lens
+# ACE-Lensing
+### *Accurate Cosmological Emulator for the Lensing Magnification PDF*
 
-**Accurate Cosmological Emulator for the Lensing PDF**
+`ace_lensing` provides a fast and accurate emulator for the probability distribution function (PDF) of gravitational lensing magnification for point sources.  
+It includes the trained PCA decomposition, XGBoost regression models, and helper utilities to load the standardized/non-standardized training datasets.
 
-This project aims to provide a powerful cosmological emulator that predicts the lensing PDF with high accuracy.
+This package allows users to:
+- predict a full magnification PDF for any cosmology–redshift point  
+- reconstruct PCA-based approximations  
+- load the training/testing datasets  
+- inspect the original simulation data used during emulator construction  
+
+---
 
 ## Installation
 
 Clone the repository:
-```bash
-git clone git@github.com:Turkero/ACE-Lensing.git
 
+```bash
+git clone https://github.com/Turkero/ACE-Lensing.git
 cd ACE-Lensing
 ```
-Here we recommend to create a virtual environment:
-```bash
-conda create -n ACE-env python=3.9  
-```
+
+Create a virtual Python environment (optional but recommended):
 
 ```bash
+conda create -n ACE-env python=3.9
 conda activate ACE-env
+```
+
+Install the package:
+
+```bash
 pip install . 
 ```
 
-## Installation Instructions For Mac users
+### For Mac users
 
-Before installing the package, ensure you have the required system dependencies:
-
-- Run the following command to install `libomp`:
-
+XGBoost requires OpenMP support. Install:
 ```bash
 brew install libomp
 ```
 
-args = {'h': 1, 'w': 2, 'z': 3, 'Om': 4}
-predict_pdf(**args)
+## Running ACE-Lensing
+### Predict the full magnification PDF
 
-params = [1, 2, 3, 4]  # order must be known
-predict_pdf(*params)
+```python
+from ace_lensing import predict_pdf
+
+args = {"Om": 0.3, "h": 0.68, "w": -1.0, "s8": 0.81, "z": 1.0}
+pdf, mu = predict_pdf(**args)
+```
+
+Using positional arguments:
+
+```python
+params = [0.3, 0.68, -1.0, 0.81, 1.0]
+pdf, mu = predict_pdf(*params)
+```
+
+### Predict the Standard Deviation only
+If you only need the standard deviation of the magnification PDF instead of the full PDF:
+
+```python
+from ace_lensing import predict_sigma
+
+args = {"Om": 0.3, "h": 0.68, "w": -1.0, "s8": 0.81, "z": 1.0}
+sigma = predict_sigma(**args)
+print(sigma)
+```
+
+Or using positional arguments:
+```python
+params = [0.3, 0.68, -1.0, 0.81, 1.0]
+sigma = predict_sigma(*params)
+```
+
+Output:
+- sigma → predicted standard deviation of the magnification distribution
+
+This is the same $\sigma$ used to de-standardize the PCA-reconstructed PDFs during training.
+
+
+### Loading Training & Testing Data
+
+```python
+from ace_lensing.model import load_training_data, load_testing_data
+
+train = load_training_data()
+test = load_testing_data()
+```
+
+All data files are stored inside:
+````
+ace_lensing/data/
+````
+
+### Package Structure
+```
+|-- MANIFEST.in
+|-- README.md
+|-- ace_lensing
+|   |-- __init__.py
+|   |-- data
+|   |   |-- testing_set.csv
+|   |   |-- testing_set_cosmo.parquet
+|   |   |-- testing_set_error.parquet
+|   |   |-- testing_set_mu_vec.parquet
+|   |   |-- testing_set_pdf.parquet
+|   |   |-- testing_set_statistics.parquet
+|   |   |-- training_set.csv
+|   |   |-- training_set_cosmo.parquet
+|   |   |-- training_set_error.parquet
+|   |   |-- training_set_mu_vec.parquet
+|   |   |-- training_set_pdf.parquet
+|   |   `-- training_set_statistics.parquet
+|   |-- model.py
+|   `-- models
+|       |-- model_comp0.xgb
+|       |-- model_comp1.xgb
+|       |-- model_comp2.xgb
+|       |-- model_comp3.xgb
+|       |-- model_mean.xgb
+|       |-- model_sigma.xgb
+|       |-- pca.pkl
+|       `-- scale.pkl
+|-- pyproject.toml
+|-- setup.py
+`-- tests
+    `-- test.ipynb
+```
+
+---
+
+### Citing
+
+If you use this package in research:
+
+<!-- Türker, Ö. T., et al. (2025).
+Accurate Cosmological Emulator for the Probability Distribution Function of Gravitational Lensing of Point Sources. -->
+
+---
+
+### License
+
+--- 
+
+### Contact
+
+For questions or suggestions, open a GitHub issue or contact:
+
+📧 tuncturker.work@gmail.com

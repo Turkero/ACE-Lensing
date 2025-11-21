@@ -1,15 +1,15 @@
 """
 model.py
 
-This module contains functions for predicting lensing probability density functions (PDF)
-using pre-trained XGBoost models. It includes data loading, preprocessing, and input
-validation utilities to ensure correct usage.
+This module contains functions for predicting lensing probability density
+functions (PDF) using pre-trained XGBoost models. It includes data loading,
+preprocessing, and input validation utilities to ensure correct usage.
 
 Functions:
 ----------
 - load_model(model_name: str) -> xgb.Booster:
     Loads a pre-trained XGBoost model.
-    
+
 - load_training_data() -> pd.DataFrame:
     Loads and combines the training data from Parquet files.
 
@@ -26,34 +26,38 @@ Functions:
     Checks if the input cosmological parameters fall within valid ranges.
 
 - predict_pdf(Om: float, h: float, w: float, s8: float, z: float) -> tuple:
-    Predicts the probability density function (PDF) based on input cosmological parameters.
+    Predicts the probability density function (PDF) based on input
+    cosmological parameters.
 
 - predict_sigma(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
-    Predicts the sigma (standard deviation) for the PDF based on input cosmological parameters.
+    Predicts the sigma (standard deviation) for the PDF based on input
+    cosmological parameters.
 
 - predict_mean(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
     Predicts the mean for the PDF based on input cosmological parameters.
 
 - transform_input(Om: float, h: float, w: float, s8: float, z: float) -> numpy.ndarray:
-    Validates and transforms the input parameters into a standardized format for model prediction.
+    Validates and transforms the input parameters into a standardized format
+    for model prediction.
 """
 import numpy as np
-import pkg_resources
+from importlib.resources import files
 import xgboost as xgb
 import pandas as pd
 import pickle
 
 
-def enforce_monotonicity(row, window_size=4):
+def enforce_monotonicity(row, window_size=5):
     """
-    Enforces monotonicity on a given 1D array (`row`) by ensuring an increasing trend up to the 
-    peak value and a decreasing trend afterward. Any violations of monotonicity are handled 
-    by setting elements to zero, starting from the point of violation.
+    Enforces monotonicity on a given 1D array (`row`) by ensuring an
+    increasing trend up to the peak value and a decreasing trend afterward.
+    Any violations of monotonicity are handled by setting elements to zero,
+    starting from the point of violation.
 
     Parameters:
     -----------
     row : array-like
-        The 1D array on which monotonicity is enforced. 
+        The 1D array on which monotonicity is enforced.
     window_size : int, optional
         The size of the window to use for checking monotonicity. Defaults to 4.
 
@@ -64,12 +68,12 @@ def enforce_monotonicity(row, window_size=4):
 
     Notes:
     ------
-    - The function identifies the peak in `row` (the maximum value) and ensures values 
-      up to this peak are monotonically increasing.
+    - The function identifies the peak in `row` (the maximum value) and
+    ensures values up to this peak are monotonically increasing.
     - After the peak, the function enforces a monotonically decreasing trend.
-    - If a monotonic trend is not detected within the specified `window_size`, the 
-      function zeroes out values starting from the violation point backward (for the 
-      increasing section) or forward (for the decreasing section).
+    - If a monotonic trend is not detected within the specified `window_size`,
+      the function zeroes out values starting from the violation point backward
+      (for the increasing section) or forward (for the decreasing section).
     """
     row = np.array(row, copy=True)
     # Find the index of the peak point
@@ -82,7 +86,7 @@ def enforce_monotonicity(row, window_size=4):
             # If we can't form a complete window, only last points
             trend = row[i + 1] > row[i]
         else:
-            # Compare the current window with the previous window we use any to avoid tiny fluctuations
+            # Compare the current window with the previous window
             trend = np.any(row[i - window_size + 1:i + 1] >= row[i - window_size:i])
         
         if not trend: 
@@ -95,9 +99,9 @@ def enforce_monotonicity(row, window_size=4):
             trend = row[i] <= row[i-1]
         else:
             trend = np.any(row[i:i + window_size] >= row[i + 1:i + 1 + window_size])
-        
+
         if not trend: 
-            row[i + 1:] = 0 
+            row[i + 1:] = 0
             break
     return row
 
@@ -123,17 +127,42 @@ def smooth_pdf_fourier(pdf, cutoff=10, x=None):
     """
     if x is None:
         x = np.linspace(-2, 8, len(pdf))
-    
+
     # Compute FFT
     fft = np.fft.fft(pdf)
     freqs = np.fft.fftfreq(len(pdf), d=(x[1] - x[0]))
-    
+
     # Zero out frequencies above cutoff
     fft[np.abs(freqs) > cutoff] = 0
-    
+
     # Inverse FFT to get smoothed PDF
     pdf_smooth = np.fft.ifft(fft).real
     return pdf_smooth
+
+
+def trim(pdf, factor=10000):
+    """
+    Trim very small values of a PDF array by zeroing out entries below a
+    relative threshold.
+
+    Parameters
+    ----------
+    pdf : np.ndarray
+        Input probability density function values.
+    factor : float, optional
+        Divisor applied to the maximum of the PDF to define the trimming
+        threshold. Values smaller than (max(pdf) / factor) are set to zero.
+        Default is 10000.
+
+    Returns
+    -------
+    np.ndarray
+        A copy of the PDF where values below the computed threshold
+        have been set to zero.
+    """
+    pdf = np.asarray(pdf)
+    threshold = np.max(pdf) / factor
+    return np.where(pdf < threshold, 0.0, pdf)
 
 
 def load_model(model_name: str) -> xgb.Booster:
@@ -157,7 +186,7 @@ def load_model(model_name: str) -> xgb.Booster:
     Exception
         If any other error occurs while loading the model.
     """
-    model_path = pkg_resources.resource_filename('ace_lensing', f'models/{model_name}.xgb')
+    model_path = files("ace_lensing") / "models" / f"{model_name}.xgb"
     try:
         model = xgb.Booster(model_file=model_path)
         return model
@@ -181,17 +210,20 @@ def load_training_data() -> pd.DataFrame:
     Exception
         If any other error occurs while loading the training data.
     """
-    base_path = 'data/training_set_{}.parquet'
+    training = "training_set_{}.parquet"
     try:
-        train_mu_vec = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('mu_vec')))
-        train_pdf = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('pdf')))
-        train_error = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('error')))
-        train_cosmo = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('cosmo')))
-        train_statistics = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('statistics')))
+        base_path = files("ace_lensing") / "data"
+
+        train_mu_vec = pd.read_parquet(base_path / training.format('mu_vec'))
+        train_pdf = pd.read_parquet(base_path / training.format('pdf'))
+        train_error = pd.read_parquet(base_path / training.format('error'))
+        train_cosmo = pd.read_parquet(base_path / training.format('cosmo'))
+        train_statistics = pd.read_parquet(base_path / training.format('statistics'))
         # Concatenate the DataFrames along the columns
         df = pd.concat([train_mu_vec, train_pdf['pdf'], train_error['poisson'],
                         train_cosmo[['Om', 'h', 'w', 's8', 'z']],
-                        train_statistics[['mean', 'var', '3th', '4th', '5th', '6th', '7th', '8th', '9th', '10th']]],
+                        train_statistics[['mean', 'var', '3th', '4th', '5th',
+                                          '6th', '7th', '8th', '9th', '10th']]],
                        axis=1)
         return df
     except FileNotFoundError as e:
@@ -202,13 +234,14 @@ def load_training_data() -> pd.DataFrame:
 
 def load_testing_data() -> pd.DataFrame:
     """
-    Load the testing data by combining separate Parquet files for different columns.
-    
+    Load the testing data by combining separate Parquet files for different
+    columns.
+
     Returns:
     --------
     pd.DataFrame
         Testing data in pandas DataFrame format with all necessary columns.
-    
+
     Raises:
     -------
     FileNotFoundError
@@ -216,18 +249,21 @@ def load_testing_data() -> pd.DataFrame:
     Exception
         If any other error occurs while loading the testing data.
     """
-    base_path = 'data/testing_set_{}.parquet'
+    testing = "testing_set_{}.parquet"
     try:
-        test_mu_vec = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('mu_vec')))
-        test_pdf = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('pdf')))
-        test_error = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('error')))
-        test_cosmo = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('cosmo')))
-        test_statistics = pd.read_parquet(pkg_resources.resource_filename('ace_lensing', base_path.format('statistics')))
-        
+        base_path = files("ace_lensing") / "data"
+
+        test_mu_vec = pd.read_parquet(base_path / testing.format('mu_vec'))
+        test_pdf = pd.read_parquet(base_path / testing.format('pdf'))
+        test_error = pd.read_parquet(base_path / testing.format('error'))
+        test_cosmo = pd.read_parquet(base_path / testing.format('cosmo'))
+        test_statistics = pd.read_parquet(base_path / testing.format('statistics'))
+
         # Concatenate the DataFrames along the columns
         df = pd.concat([test_mu_vec, test_pdf['pdf'], test_error['poisson'],
                         test_cosmo[['Om', 'h', 'w', 's8', 'z']],
-                        test_statistics[['mean', 'var', '3th', '4th', '5th', '6th', '7th', '8th', '9th', '10th']]],
+                        test_statistics[['mean', 'var', '3th', '4th', '5th',
+                                         '6th', '7th', '8th', '9th', '10th']]],
                        axis=1)
         return df
     except FileNotFoundError as e:
@@ -252,7 +288,7 @@ def load_pca():
     Exception
         If any other error occurs while loading the PCA model.
     """
-    pca_path = pkg_resources.resource_filename('ace_lensing', 'models/pca.pkl')
+    pca_path = files("ace_lensing") / "models" / "pca.pkl"
     try:
         with open(pca_path, 'rb') as f:
             return pickle.load(f)
@@ -278,7 +314,7 @@ def load_scaling():
     Exception
         If any other error occurs while loading the scaling model.
     """
-    scale_path = pkg_resources.resource_filename('ace_lensing', 'models/scale.pkl')
+    scale_path = files("ace_lensing") / "models" / "scale.pkl"
     try:
         with open(scale_path, 'rb') as f:
             return pickle.load(f)
@@ -290,8 +326,8 @@ def load_scaling():
 
 def check_parameters(Om: float, h: float, w: float, s8: float, z: float) -> bool:
     """
-    Checks if the input cosmological parameters fall within specified ranges for 
-    predicting the PDF.
+    Checks if the input cosmological parameters fall within specified ranges
+    for predicting the PDF.
 
     Parameters:
     -----------
@@ -300,9 +336,10 @@ def check_parameters(Om: float, h: float, w: float, s8: float, z: float) -> bool
     h : float
         Hubble parameter, should be between 60 and 80.
     w : float
-        Dark energy equation of state parameter, should be between -1.5 and -0.7.
+        Dark energy equation of state parameter, should be between
+        -1.5 and -0.7.
     s8 : float
-        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc, 
+        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc,
         should be between 0.7 and 0.9.
     z : float
         Redshift value, should be between 0.2 and 6.
@@ -328,15 +365,16 @@ def check_parameters(Om: float, h: float, w: float, s8: float, z: float) -> bool
         raise ValueError(f"s8 value {s8} is out of range (0.7 - 0.9)")
     if not (0.2 <= z <= 6):
         raise ValueError(f"z value {z} is out of range (0.2 - 6)")
-    
+
     return True
 
 
-def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=True):
+def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float,
+                verbose=True):
     """
-    Predict the probability density function (PDF) for given cosmological parameters using
-    pre-trained XGBoost models and inverse PCA reconstruction, followed by Fourier smoothing
-    and normalization.
+    Predict the probability density function (PDF) for given cosmological
+    parameters using pre-trained XGBoost models and inverse PCA reconstruction,
+    followed by Fourier smoothing and normalization.
 
     Parameters
     ----------
@@ -345,20 +383,24 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
     h : float
         Dimensionless Hubble parameter, typically in the range 0.6 to 0.8.
     w : float
-        Dark energy equation of state parameter, typically in the range -1.5 to -0.7.
+        Dark energy equation of state parameter, typically in the range -1.5
+        to -0.7.
     s8 : float
-        Standard deviation of matter density fluctuations, typically in the range 0.7 to 0.9.
+        Standard deviation of matter density fluctuations, typically in the
+        range 0.7 to 0.9.
     z : float
         Redshift value (non-negative float).
     verbose : bool, optional
-        If True, prints the input parameters and diagnostic information. Default is True.
+        If True, prints the input parameters and diagnostic information.
+        Default is True.
 
     Returns
     -------
     mu_vec_prime : numpy.ndarray of shape (5000,)
         Standardized and scaled mu vector corresponding to the PDF values.
     pdf_prime_normalized : numpy.ndarray of shape (5000,)
-        Normalized PDF corresponding to `mu_vec_prime`. The values are non-negative and sum to 1
+        Normalized PDF corresponding to `mu_vec_prime`. The values are
+        non-negative and sum to 1
         under the integration over `mu_vec_prime`.
 
     Notes
@@ -366,15 +408,18 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
     - The function performs the following steps:
         1. Checks input parameters for validity.
         2. Transforms inputs into model features.
-        3. Uses pre-trained XGBoost models to predict PCA components of the PDF.
+        3. Uses pre-trained XGBoost models to predict PCA components of the
+        PDF.
         4. Reconstructs the PDF via inverse PCA transformation.
-        5. Enforces monotonicity and smooths the PDF using Fourier transform with a cutoff of 10.
+        5. Enforces monotonicity and smooths the PDF using Fourier transform
+        with a cutoff of 10.
         6. Uses  pre-trained XGBoost models to predict mean and sigma.
         7. Unstandardized the PDF.
         8. Forces mean to be 1.
         9. Normalizes the resulting PDF.
-        
-    - The resulting `mu_vec_prime` and `pdf_prime_normalized` can be used for plotting or further analysis.
+
+    - The resulting `mu_vec_prime` and `pdf_prime_normalized` can be used for
+    plotting or further analysis.
     """
 
     # Count the number of parameters provided
@@ -391,10 +436,9 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
         print(f"Received input parameters: Om={Om}, h={h}, w={w}, s8={s8}, z={z}")
 
     X_input = transform_input(*params)
-    
+
     # Prepare input data in DMatrix format for XGBoost
     dmatrix = xgb.DMatrix(X_input)
-
 
     components_predictions = []
     # Load the pre-trained XGBoost model
@@ -404,7 +448,7 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
 
         # Perform prediction with the current model
         pred = model.predict(dmatrix)
-        
+
         # Store the predicted component
         components_predictions.append(pred)
 
@@ -417,31 +461,31 @@ def predict_pdf(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tru
     # Defining the mu vector according the training set
     mu_vec_std = np.linspace(-2, 8, 5000)
 
-    pdfs_trained = enforce_monotonicity(pdfs_reconstructed[0])
-    pdf_smoothed = smooth_pdf_fourier(pdfs_trained, cutoff=10, x=mu_vec_std)
-
-
-    model_mean = load_model("model_mean")  
-    model_sigma = load_model("model_sigma") 
+    model_mean = load_model("model_mean")
+    model_sigma = load_model("model_sigma")
 
     mean = model_mean.predict(dmatrix)
     sigma = model_sigma.predict(dmatrix)
 
     mu_vec = mu_vec_std * sigma + mean
-    pdf_non_std = pdf_smoothed / sigma
+    pdf_non_std = pdfs_reconstructed[0] / sigma
 
     mu_vec_prime = mu_vec / mean
     pdf_prime = pdf_non_std * mean
 
-    mu_center = (mu_vec_prime[1:] - mu_vec_prime[:-1]) / 2
+    pdf_smoothed = smooth_pdf_fourier(pdf_prime, cutoff=10, x=mu_vec_std)
+    pdfs_monotone = enforce_monotonicity(pdf_smoothed)
+    pdf_trimmed = trim(pdfs_monotone)
+
     dx = np.diff(mu_vec_prime)
-    pdf_prime_normalized = pdf_prime / np.sum(pdf_prime*dx)
+    pdf_normalized = pdf_trimmed / np.sum(pdf_trimmed*dx)
 
-    print("\nMean and Normalization Check:")
-    print(f"Normalization: {np.sum(pdf_prime_normalized * dx)}")
-    print(f"Mean: {np.sum(mu_center * pdf_prime_normalized * dx)}")
+    # print("\nMean and Normalization Check:")
+    # mu_center = (mu_vec_prime[1:] - mu_vec_prime[:-1]) / 2
+    # print(f"Normalization: {np.sum(pdf_prime_normalized * dx)}")
+    # print(f"Mean: {np.sum(mu_center * pdf_prime_normalized * dx)}")
 
-    return mu_vec_prime, pdf_prime_normalized
+    return mu_vec_prime[:-1], pdf_normalized
 
 
 def predict_sigma(Om: float, h: float, w: float,  s8: float, z: float, verbose=True):
@@ -492,7 +536,7 @@ def predict_sigma(Om: float, h: float, w: float,  s8: float, z: float, verbose=T
     dmatrix = xgb.DMatrix(X_input)
     model = load_model("model_sigma")   
     return model.predict(dmatrix)
-    
+
 
 def predict_mean(Om: float, h: float, w: float,  s8: float, z: float, verbose=True):
     """
@@ -543,7 +587,6 @@ def predict_mean(Om: float, h: float, w: float,  s8: float, z: float, verbose=Tr
     return model.predict(dmatrix)
 
 
-
 def transform_input(Om: float, h: float, w: float,  s8: float, z: float):
     """
     Validates and transforms the input parameters into a standardized format for model prediction.
@@ -557,7 +600,8 @@ def transform_input(Om: float, h: float, w: float,  s8: float, z: float):
     w : float
         Dark energy equation of state parameter.
     s8 : float, optional
-        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If not provided, it will be calculated using other parameters.
+        Standard deviation of matter fluctuations on a scale of 8 h^-1 Mpc. If
+        not provided, it will be calculated using other parameters.
     z : float
         Redshift.
 
@@ -569,7 +613,8 @@ def transform_input(Om: float, h: float, w: float,  s8: float, z: float):
     Raises:
     -------
     ValueError
-        If any mandatory parameter (h, w, z) is missing or fewer than two optional parameters (Om, s8, S8) are provided.
+        If any mandatory parameter (h, w, z) is missing or fewer than two
+        optional parameters (Om, s8, S8) are provided.
     """
 
     X_input = np.array([Om, h, w, s8, z])

@@ -10,7 +10,7 @@ include ace_lensing/models/scale.pkl
 # Include all Python files in the ace_lensing directory
 recursive-include ace_lensing *.py
 
-# Include the training data file
+# Include the training and testing data file
 recursive-include ace_lensing/data *.parquet
 
 # Include the README file
