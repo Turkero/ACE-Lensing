@@ -142,6 +142,9 @@ Accurate Cosmological Emulator for the Probability Distribution Function of Grav
 
 ### License
 
+MIT © 2025 Özgen Tunç Türker.  
+See the [LICENSE](LICENSE) file for the full text.
+
 --- 
 
 ### Contact
